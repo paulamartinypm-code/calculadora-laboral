@@ -1,0 +1,53 @@
+name: Actualizar Datos IPC y Tasa Pasiva
+
+on:
+  schedule:
+    # Corre todos los días hábiles a las 8:00 AM hora Argentina (UTC-3 = 11:00 UTC)
+    - cron: '0 11 * * 1-5'
+  workflow_dispatch:
+    # También permite ejecutarlo manualmente desde GitHub con un botón
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # necesario para hacer commit y push
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias (xlrd para parsear XLS del BCRA)
+        run: pip install xlrd
+
+      - name: Ejecutar script de actualización
+        run: python actualizar_datos.py
+
+      - name: Verificar si hubo cambios
+        id: check_changes
+        run: |
+          if [ -f ".actualizado" ]; then
+            echo "hay_cambios=true" >> $GITHUB_OUTPUT
+            rm .actualizado
+          else
+            echo "hay_cambios=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit y push de los datos actualizados
+        if: steps.check_changes.outputs.hay_cambios == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          FECHA=$(date +'%d/%m/%Y')
+          git commit -m "📊 Datos actualizados automáticamente — $FECHA"
+          git push
+
+      - name: Sin cambios — datos ya estaban al día
+        if: steps.check_changes.outputs.hay_cambios == 'false'
+        run: echo "✅ Los datos ya estaban al día. No se realizaron cambios."
